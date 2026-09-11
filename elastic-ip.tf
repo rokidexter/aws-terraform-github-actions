@@ -1,0 +1,1 @@
+# Elastic IP resources are managed by the compute module.
