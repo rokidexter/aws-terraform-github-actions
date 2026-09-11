@@ -13,7 +13,6 @@ permissions:
   id-token: write
 
 jobs:
-
   terraform-plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
@@ -21,6 +20,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Inspect GitHub OIDC Token
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          python3 -c "import sys, json, base64; payload = sys.argv[1].split('.')[1]; payload += '=' * (-len(payload) % 4); data = json.loads(base64.urlsafe_b64decode(payload)); print('ACTUAL_SUB=' + data.get('sub', '')); print('ACTUAL_AUD=' + str(data.get('aud', ''))); print('ACTUAL_REPO=' + data.get('repository', ''))" "$TOKEN"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -62,13 +67,9 @@ jobs:
             tfplan
             tfplan.txt
 
-
   terraform-apply:
     name: Terraform Apply
     needs: terraform-plan
-
-    # Apply only after a push to main.
-    # Pull requests will run the Plan job but never apply infrastructure.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     environment:
