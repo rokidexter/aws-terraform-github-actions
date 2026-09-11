@@ -1,4 +1,4 @@
-name: Terraform CI
+name: Terraform CI/CD
 
 on:
   push:
@@ -13,8 +13,9 @@ permissions:
   id-token: write
 
 jobs:
-  terraform:
-    name: Terraform CI
+
+  terraform-plan:
+    name: Terraform Plan
     runs-on: ubuntu-latest
 
     steps:
@@ -60,3 +61,46 @@ jobs:
           path: |
             tfplan
             tfplan.txt
+
+
+  terraform-apply:
+    name: Terraform Apply
+    needs: terraform-plan
+
+    # Apply only after a push to main.
+    # Pull requests will run the Plan job but never apply infrastructure.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    environment:
+      name: production
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::382170164329:role/terraform-github-actions-role
+          aws-region: ap-south-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+
+      - name: Check Terraform version
+        run: terraform version
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Download Approved Terraform Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
